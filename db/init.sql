@@ -23,5 +23,9 @@ CREATE TABLE IF NOT EXISTS applications (
   cover_letter TEXT,
   cv_path TEXT,
   status TEXT NOT NULL DEFAULT 'Nouvelle',
+  recruiter_message TEXT,
   created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
+
+ALTER TABLE applications
+  ADD COLUMN IF NOT EXISTS recruiter_message TEXT;

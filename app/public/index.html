@@ -15,6 +15,28 @@ button.s{background:#fff;color:#0F1B33;border:1px solid #C8CFDA}
 table{width:100%;border-collapse:collapse}th{background:#F4F6FA;text-align:left;font-size:13px;color:#4A5568}th,td{padding:14px 16px;border-top:1px solid #E8EBF0}
 .b{display:inline-block;padding:3px 10px;border-radius:99px;background:#E6EFFC;color:#174A99;font-size:13px;font-weight:600}
 .sub{color:#4A5568;font-size:14px}.err{color:#B3261E;margin:8px 0}.box{max-width:400px;margin:64px auto}
+
+.b.ok{background:#E3F6E8;color:#14612B}.b.no{background:#FDE7E5;color:#9B1C14}.b.warn{background:#FFF1D6;color:#8A5200}.b.int{background:#EDE7FB;color:#4B2A9B}.b.gr{background:#EEF0F4;color:#4A5568}.b.blue{background:#E6EFFC;color:#174A99}
+.msg{margin-top:6px;font-size:13px;color:#4A5568}
+/* Page de connexion / inscription (maquette) */
+main.full{max-width:none;padding:0}
+.auth{display:grid;grid-template-columns:53% 47%;min-height:100vh;background:#fff}
+.hero{background:#1A2849;color:#fff;padding:48px 48px 40px;display:flex;flex-direction:column;justify-content:space-between}
+.hero .logo{font-size:20px;font-weight:700;letter-spacing:-.3px}.hero .logo span{color:#8FD0FF}
+.hero h2{font-size:clamp(32px,3.7vw,54px);line-height:1.08;margin:0 0 18px;font-weight:800;letter-spacing:-1px}
+.hero p{margin:0;max-width:430px;line-height:1.45;font-size:clamp(14px,1.25vw,18px);color:#F1F4FA}
+.hero small{color:#A9C4F2;font-size:13px}
+.formside{display:flex;align-items:center;justify-content:center;padding:32px;background:#fff}
+.formbox{width:100%;max-width:330px}
+.tabs{display:flex;gap:64px;justify-content:center;margin-bottom:30px}
+.tab{background:none;border:0;border-radius:0;min-height:28px;padding:0;font-size:13px;font-weight:500;color:#3B7FC4;cursor:pointer}
+.tab.on{color:#0F1B33}
+.formbox label{font-size:12px;font-weight:600;margin-bottom:14px;gap:6px;color:#0F1B33}
+.formbox input,.formbox select{min-height:36px;font-size:13px;border:0;border-radius:0;padding:0 10px;background:#fff;color:#0F1B33}
+.formbox select{padding:0 6px}
+.formbox input::placeholder{color:#B8BFCB}
+.formbox .go{width:100%;min-height:44px;margin-top:6px;border-radius:6px;background:#2F80FF;font-size:12px;font-weight:700;box-shadow:none}
+@media(max-width:800px){.auth{grid-template-columns:1fr}.hero{display:none}}
 </style></head><body><div id="nav"></div><main id="app"></main>
 <script>
 let token = localStorage.getItem('token');
@@ -22,6 +44,10 @@ const app = document.getElementById('app'), navEl = document.getElementById('nav
 const user = () => { try { return JSON.parse(atob(token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/'))); } catch (e) { return null; } };
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmt = d => new Date(d).toLocaleDateString('fr-FR');
+
+const STATUTS = ['Nouvelle','En cours de sélection','Entretien demandé','Admis','Refusé','Informations manquantes'];
+const STATUT_CLASS = { 'Nouvelle':'gr', 'En cours de sélection':'blue', 'Entretien demandé':'int', 'Admis':'ok', 'Refusé':'no', 'Informations manquantes':'warn' };
+const badge = st => `<span class="b ${STATUT_CLASS[st] || ''}">${esc(st)}</span>`;
 
 async function api(path, o = {}) {
   o.headers = Object.assign({}, o.headers);
@@ -36,9 +62,9 @@ async function api(path, o = {}) {
 function logout() { localStorage.removeItem('token'); token = null; location.hash = '#/login'; }
 async function openCv(id) { try { window.open(URL.createObjectURL(await api('/cv/' + id, { blob: true }))); } catch (e) { alert('CV indisponible : ' + e.message); } }
 
-function renderNav() {
+function renderNav(show = true) {
   const u = user();
-  if (!u) { navEl.innerHTML = ''; return; }
+  if (!u || !show) { navEl.innerHTML = ''; return; }
   const links = { candidat: [['#/jobs','Offres'],['#/mine','Mes candidatures']],
     recruteur: [['#/received','Candidatures'],['#/new','Publier une offre']],
     admin: [['#/admin','Utilisateurs'],['#/received','Candidatures']] }[u.role] || [];
@@ -49,12 +75,25 @@ function renderNav() {
 
 const views = {
   login(mode = 'login') {
-    app.innerHTML = `<div class="box card"><h1>${mode === 'login' ? 'Connexion' : 'Inscription'}</h1>
-      <label>E-mail<input id="e" type="email"></label><label>Mot de passe<input id="p" type="password"></label>
-      ${mode === 'register' ? '<label>Je suis<select id="r"><option value="candidat">Candidat</option><option value="recruteur">Recruteur</option></select></label>' : ''}
-      <div id="m" class="err"></div><button id="go">${mode === 'login' ? 'Se connecter' : "S'inscrire"}</button>
-      <p class="sub"><a href="#" id="sw">${mode === 'login' ? 'Créer un compte' : 'J\'ai déjà un compte'}</a></p></div>`;
-    document.getElementById('sw').onclick = e => { e.preventDefault(); views.login(mode === 'login' ? 'register' : 'login'); };
+    const isLogin = mode === 'login';
+    app.className = 'full';
+    app.innerHTML = `<div class="auth">
+      <aside class="hero">
+        <div class="logo">Job<span>Board</span></div>
+        <div><h2>Trouvez le poste.<br>Recrutez le bon profil.</h2>
+        <p>Les candidats postulent avec leur CV, les recruteurs gèrent leurs offres et leurs candidatures.</p></div>
+        <small>Projet DevSecOps · TEK-UP University</small>
+      </aside>
+      <section class="formside"><div class="formbox">
+        <div class="tabs"><button type="button" class="tab ${isLogin ? 'on' : ''}" id="t-login">Connexion</button>
+        <button type="button" class="tab ${isLogin ? '' : 'on'}" id="t-register">Inscription</button></div>
+        <label>E-mail<input id="e" type="email" placeholder="nom@exemple.com"></label>
+        <label>Mot de passe<input id="p" type="password" placeholder="Mot de passe"></label>
+        <label>Je suis<select id="r"><option value="candidat">Candidat</option><option value="recruteur">Recruteur</option></select></label>
+        <div id="m" class="err"></div><button id="go" class="go">${isLogin ? 'Se connecter' : "S'inscrire"}</button>
+      </div></section></div>`;
+    document.getElementById('t-login').onclick = () => views.login('login');
+    document.getElementById('t-register').onclick = () => views.login('register');
     document.getElementById('go').onclick = async () => {
       const email = document.getElementById('e').value, password = document.getElementById('p').value;
       try {
@@ -94,14 +133,37 @@ const views = {
   async mine() {
     const a = await api('/applications/mine');
     app.innerHTML = `<h1>Mes candidatures</h1><div class="card"><table><tr><th>Offre</th><th>Entreprise</th><th>Date</th><th>CV</th><th>Statut</th></tr>
-      ${a.map(x => `<tr><td>${esc(x.title)}</td><td>${esc(x.company)}</td><td>${fmt(x.created_at)}</td>
-      <td><a href="#" onclick="openCv(${+x.id});return false">Voir mon CV</a></td><td><span class="b">${esc(x.status)}</span></td></tr>`).join('')}</table></div>`;
+      ${a.map(x => `<tr><td>${esc(x.title)}</td><td>${esc(x.company)}</td><td>${esc(fmt(x.created_at))}</td>
+      <td><a href="#" onclick="openCv(${+x.id});return false">Voir mon CV</a></td>
+      <td>${badge(x.status)}${x.recruiter_message ? `<div class="msg">Message du recruteur : ${esc(x.recruiter_message)}</div>` : ''}</td></tr>`).join('')}</table></div>`;
   },
   async received() {
     const a = await api('/applications/received');
-    app.innerHTML = `<h1>Candidatures reçues</h1><div class="card"><table><tr><th>Candidat</th><th>Offre</th><th>Date</th><th>CV</th><th>Statut</th></tr>
-      ${a.map(x => `<tr><td>${esc(x.candidate_email)}</td><td>${esc(x.title)}</td><td>${fmt(x.created_at)}</td>
-      <td><a href="#" onclick="openCv(${+x.id});return false">Voir le CV</a></td><td><span class="b">${esc(x.status)}</span></td></tr>`).join('')}</table></div>`;
+    app.innerHTML = `<h1>Candidatures reçues</h1><div class="card"><table><tr><th>Candidat</th><th>Offre</th><th>Date</th><th>CV</th><th>Statut</th><th>Profil</th></tr>
+      ${a.map(x => `<tr><td>${esc(x.candidate_email)}</td><td>${esc(x.title)}</td><td>${esc(fmt(x.created_at))}</td>
+      <td><a href="#" onclick="openCv(${+x.id});return false">Voir le CV</a></td><td>${badge(x.status)}</td>
+      <td><a href="#/profile/${+x.id}">Voir le profil</a></td></tr>`).join('')}</table></div>`;
+  },
+  async profile(id) {
+    const a = await api('/applications/' + id);
+    const u = user(), canEdit = u.role === 'recruteur' || u.role === 'admin';
+    const returnTo = u.role === 'candidat' ? '#/mine' : '#/received';
+    app.innerHTML = `<p><a href="${returnTo}">← Retour aux candidatures</a></p><h1>Profil du candidat</h1>
+      <div class="card row sp"><div><b>${esc(a.candidate_email)}</b>
+        <div class="sub">Candidature pour « ${esc(a.title)} » chez ${esc(a.company)} · ${esc(fmt(a.created_at))}</div></div>${badge(a.status)}</div>
+      <div class="card"><h2>Lettre de motivation</h2><p>${esc(a.cover_letter) || '<span class="sub">Aucune lettre.</span>'}</p>
+        <button class="s" onclick="openCv(${+a.id})">Voir le CV</button></div>
+      ${canEdit ? `<div class="card"><h2>Décision</h2>
+        <label>Statut<select id="st">${STATUTS.map(s => `<option${s === a.status ? ' selected' : ''}>${s}</option>`).join('')}</select></label>
+        <label>Message pour le candidat (facultatif)<textarea id="msg" rows="3">${esc(a.recruiter_message)}</textarea></label>
+        <div id="m" class="err"></div><button id="save">Enregistrer</button></div>` : ''}`;
+    if (canEdit) document.getElementById('save').onclick = async () => {
+      const m = document.getElementById('m');
+      try {
+        await api('/applications/' + id + '/status', { method: 'PATCH', json: { status: document.getElementById('st').value, message: document.getElementById('msg').value } });
+        m.className = 'sub'; m.textContent = 'Statut enregistré.';
+      } catch (e) { m.className = 'err'; m.textContent = e.message; }
+    };
   },
   new() {
     app.innerHTML = `<div class="card"><h1>Publier une offre</h1><label>Titre<input id="t"></label>
@@ -127,7 +189,8 @@ async function deact(id) { await api('/admin/users/' + id + '/deactivate', { met
 
 async function route() {
   const [, name, arg] = (location.hash || '#/').split('/');
-  renderNav();
+  renderNav(name !== 'login');
+  app.className = user() ? '' : 'full';
   if (!user()) return views.login();
   const def = { candidat: 'jobs', recruteur: 'received', admin: 'admin' }[user().role];
   try { await (views[name] || views[def])(arg); } catch (e) { app.innerHTML = `<div class="err">${esc(e.message)}</div>`; }

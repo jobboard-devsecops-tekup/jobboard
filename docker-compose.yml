@@ -1,5 +1,4 @@
-# Base de données seule pour le développement local.
-# (L'application sera conteneurisée à l'étape suivante.)
+# Application et base de données.
 services:
   db:
     image: postgres:16-alpine
@@ -12,5 +11,20 @@ services:
     volumes:
       - dbdata:/var/lib/postgresql/data
       - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql
+
+  app:
+    build: ./app
+    image: jobboard-app
+    ports:
+      - "3000:3000"
+    environment:
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_USER: jobboard
+      DB_PASSWORD: jobboard_pass_123
+      DB_NAME: jobboard
+    depends_on:
+      - db
+
 volumes:
   dbdata:
