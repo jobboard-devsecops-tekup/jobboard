@@ -1,0 +1,16 @@
+# Base de données seule pour le développement local.
+# (L'application sera conteneurisée à l'étape suivante.)
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: jobboard
+      POSTGRES_PASSWORD: jobboard_pass_123   # VULN-4 : secret en clair (valeur de test)
+      POSTGRES_DB: jobboard
+    ports:
+      - "5432:5432"
+    volumes:
+      - dbdata:/var/lib/postgresql/data
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql
+volumes:
+  dbdata:

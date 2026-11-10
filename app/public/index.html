@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JobBoard</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:Inter,system-ui,sans-serif;background:#F4F6FA;color:#0F1B33}
+a{color:#1F5FBF}nav{display:flex;justify-content:space-between;align-items:center;height:64px;padding:0 40px;background:#fff;border-bottom:1px solid #E1E5EB}
+nav .l{display:flex;gap:28px;align-items:center}nav b{font-size:22px}nav b span{color:#1F5FBF}nav a{text-decoration:none;color:#4A5568}
+main{max-width:1000px;margin:0 auto;padding:32px}h1{font-size:28px;margin:0 0 20px}
+.card{background:#fff;border:1px solid #E1E5EB;border-radius:14px;padding:20px;margin-bottom:14px;box-shadow:0 1px 3px rgba(15,27,51,.06)}
+.row{display:flex;gap:12px;align-items:center}.row.sp{justify-content:space-between}
+input,select,textarea{width:100%;min-height:44px;border:1px solid #C8CFDA;border-radius:8px;padding:8px 12px;font:inherit;background:#fff}
+label{display:flex;flex-direction:column;gap:6px;font-weight:600;font-size:14px;margin-bottom:14px}
+button{min-height:44px;padding:0 20px;border:0;border-radius:8px;background:#1F5FBF;color:#fff;font-weight:600;cursor:pointer;font:inherit;font-weight:600}
+button.s{background:#fff;color:#0F1B33;border:1px solid #C8CFDA}
+table{width:100%;border-collapse:collapse}th{background:#F4F6FA;text-align:left;font-size:13px;color:#4A5568}th,td{padding:14px 16px;border-top:1px solid #E8EBF0}
+.b{display:inline-block;padding:3px 10px;border-radius:99px;background:#E6EFFC;color:#174A99;font-size:13px;font-weight:600}
+.sub{color:#4A5568;font-size:14px}.err{color:#B3261E;margin:8px 0}.box{max-width:400px;margin:64px auto}
+</style></head><body><div id="nav"></div><main id="app"></main>
+<script>
+let token = localStorage.getItem('token');
+const app = document.getElementById('app'), navEl = document.getElementById('nav');
+const user = () => { try { return JSON.parse(atob(token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/'))); } catch (e) { return null; } };
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmt = d => new Date(d).toLocaleDateString('fr-FR');
+
+async function api(path, o = {}) {
+  o.headers = Object.assign({}, o.headers);
+  if (token) o.headers.Authorization = 'Bearer ' + token;
+  if (o.json) { o.headers['Content-Type'] = 'application/json'; o.body = JSON.stringify(o.json); }
+  const r = await fetch('/api' + path, o);
+  if (o.blob) return r.ok ? r.blob() : Promise.reject(new Error(r.status));
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d.error || r.status);
+  return d;
+}
+function logout() { localStorage.removeItem('token'); token = null; location.hash = '#/login'; }
+async function openCv(id) { try { window.open(URL.createObjectURL(await api('/cv/' + id, { blob: true }))); } catch (e) { alert('CV indisponible : ' + e.message); } }
+
+function renderNav() {
+  const u = user();
+  if (!u) { navEl.innerHTML = ''; return; }
+  const links = { candidat: [['#/jobs','Offres'],['#/mine','Mes candidatures']],
+    recruteur: [['#/received','Candidatures'],['#/new','Publier une offre']],
+    admin: [['#/admin','Utilisateurs'],['#/received','Candidatures']] }[u.role] || [];
+  navEl.innerHTML = `<nav><div class="l"><b>Job<span>Board</span></b>${links.map(l => `<a href="${l[0]}">${l[1]}</a>`).join('')}</div>
+    <div class="row"><span class="b">${esc(u.role)}</span><span class="sub">${esc(u.email)}</span><a href="#" id="lo">Se déconnecter</a></div></nav>`;
+  document.getElementById('lo').onclick = e => { e.preventDefault(); logout(); };
+}
+
+const views = {
+  login(mode = 'login') {
+    app.innerHTML = `<div class="box card"><h1>${mode === 'login' ? 'Connexion' : 'Inscription'}</h1>
+      <label>E-mail<input id="e" type="email"></label><label>Mot de passe<input id="p" type="password"></label>
+      ${mode === 'register' ? '<label>Je suis<select id="r"><option value="candidat">Candidat</option><option value="recruteur">Recruteur</option></select></label>' : ''}
+      <div id="m" class="err"></div><button id="go">${mode === 'login' ? 'Se connecter' : "S'inscrire"}</button>
+      <p class="sub"><a href="#" id="sw">${mode === 'login' ? 'Créer un compte' : 'J\'ai déjà un compte'}</a></p></div>`;
+    document.getElementById('sw').onclick = e => { e.preventDefault(); views.login(mode === 'login' ? 'register' : 'login'); };
+    document.getElementById('go').onclick = async () => {
+      const email = document.getElementById('e').value, password = document.getElementById('p').value;
+      try {
+        if (mode === 'register') { await api('/auth/register', { method: 'POST', json: { email, password, role: document.getElementById('r').value } }); }
+        const d = await api('/auth/login', { method: 'POST', json: { email, password } });
+        token = d.token; localStorage.setItem('token', token);
+        location.hash = user().role === 'candidat' ? '#/jobs' : user().role === 'admin' ? '#/admin' : '#/received';
+      } catch (e) { document.getElementById('m').textContent = e.message; }
+    };
+  },
+  async jobs() {
+    app.innerHTML = `<h1>Offres d'emploi</h1><div class="row card"><input id="q" placeholder="Rechercher par titre ou mot-clé"><button id="s">Rechercher</button></div><div id="list"></div>`;
+    const load = async () => {
+      try {
+        const jobs = await api('/jobs?q=' + encodeURIComponent(document.getElementById('q').value));
+        document.getElementById('list').innerHTML = jobs.map(j => `<div class="card row sp"><div><b>${esc(j.title)}</b>
+          <div class="sub">${esc(j.company)} · ${esc(j.city)}</div><span class="b">${esc(j.contract)}</span></div>
+          <button onclick="location.hash='#/apply/${esc(j.id)}'">Postuler</button></div>`).join('') || '<p class="sub">Aucune offre.</p>';
+      } catch (e) { document.getElementById('list').innerHTML = `<div class="err">${esc(e.message)}</div>`; }
+    };
+    document.getElementById('s').onclick = load; load();
+  },
+  async apply(id) {
+    const j = await api('/jobs/' + id);
+    // VULN-6 : la description est injectée telle quelle (XSS stocké)
+    app.innerHTML = `<div class="card"><h1>${esc(j.title)}</h1><div class="sub">${esc(j.company)} · ${esc(j.city)} · ${esc(j.contract)}</div>
+      <p>${j.description}</p></div><div class="card"><h2>Postuler à cette offre</h2>
+      <label>Lettre de motivation<textarea id="cl" rows="5"></textarea></label><label>CV<input id="cv" type="file"></label>
+      <div id="m" class="err"></div><button id="go">Envoyer ma candidature</button></div>`;
+    document.getElementById('go').onclick = async () => {
+      const fd = new FormData(); fd.append('job_id', id); fd.append('cover_letter', document.getElementById('cl').value);
+      const f = document.getElementById('cv').files[0]; if (f) fd.append('cv', f);
+      try { await api('/applications', { method: 'POST', body: fd }); location.hash = '#/mine'; }
+      catch (e) { document.getElementById('m').textContent = e.message; }
+    };
+  },
+  async mine() {
+    const a = await api('/applications/mine');
+    app.innerHTML = `<h1>Mes candidatures</h1><div class="card"><table><tr><th>Offre</th><th>Entreprise</th><th>Date</th><th>CV</th><th>Statut</th></tr>
+      ${a.map(x => `<tr><td>${esc(x.title)}</td><td>${esc(x.company)}</td><td>${fmt(x.created_at)}</td>
+      <td><a href="#" onclick="openCv(${+x.id});return false">Voir mon CV</a></td><td><span class="b">${esc(x.status)}</span></td></tr>`).join('')}</table></div>`;
+  },
+  async received() {
+    const a = await api('/applications/received');
+    app.innerHTML = `<h1>Candidatures reçues</h1><div class="card"><table><tr><th>Candidat</th><th>Offre</th><th>Date</th><th>CV</th><th>Statut</th></tr>
+      ${a.map(x => `<tr><td>${esc(x.candidate_email)}</td><td>${esc(x.title)}</td><td>${fmt(x.created_at)}</td>
+      <td><a href="#" onclick="openCv(${+x.id});return false">Voir le CV</a></td><td><span class="b">${esc(x.status)}</span></td></tr>`).join('')}</table></div>`;
+  },
+  new() {
+    app.innerHTML = `<div class="card"><h1>Publier une offre</h1><label>Titre<input id="t"></label>
+      <div class="row"><label style="flex:1">Entreprise<input id="c"></label><label style="flex:1">Ville<input id="v"></label></div>
+      <label>Contrat<select id="k"><option>CDI</option><option>CDD</option><option>Stage</option></select></label>
+      <label>Description<textarea id="d" rows="6"></textarea></label><div id="m" class="err"></div><button id="go">Publier</button></div>`;
+    document.getElementById('go').onclick = async () => {
+      const g = i => document.getElementById(i).value;
+      try { await api('/jobs', { method: 'POST', json: { title: g('t'), company: g('c'), city: g('v'), contract: g('k'), description: g('d') } }); location.hash = '#/received'; }
+      catch (e) { document.getElementById('m').textContent = e.message; }
+    };
+  },
+  async admin() {
+    const [u, s] = await Promise.all([api('/admin/users'), api('/admin/stats')]);
+    app.innerHTML = `<h1>Gestion des utilisateurs</h1><div class="row" style="margin-bottom:14px">
+      <div class="card" style="flex:1">Utilisateurs<h1>${s.users}</h1></div><div class="card" style="flex:1">Offres<h1>${s.jobs}</h1></div><div class="card" style="flex:1">Candidatures<h1>${s.applications}</h1></div></div>
+      <div class="card"><table><tr><th>E-mail</th><th>Rôle</th><th>Inscrit le</th><th>Statut</th><th>Actions</th></tr>
+      ${u.map(x => `<tr><td>${esc(x.email)}</td><td><span class="b">${esc(x.role)}</span></td><td>${fmt(x.created_at)}</td><td>${x.active ? 'Actif' : 'Désactivé'}</td>
+      <td><button class="s" onclick="deact(${+x.id})">Désactiver</button></td></tr>`).join('')}</table></div>`;
+  }
+};
+async function deact(id) { await api('/admin/users/' + id + '/deactivate', { method: 'PATCH' }); route(); }
+
+async function route() {
+  const [, name, arg] = (location.hash || '#/').split('/');
+  renderNav();
+  if (!user()) return views.login();
+  const def = { candidat: 'jobs', recruteur: 'received', admin: 'admin' }[user().role];
+  try { await (views[name] || views[def])(arg); } catch (e) { app.innerHTML = `<div class="err">${esc(e.message)}</div>`; }
+}
+window.onhashchange = route; route();
+</script></body></html>
